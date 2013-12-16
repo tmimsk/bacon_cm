@@ -480,6 +480,11 @@ static int32_t msm_actuator_power_down(struct msm_actuator_ctrl_t *a_ctrl)
 		pr_err("%s failed %d\n", __func__, __LINE__);
 		return rc;
 	}
+	rc = msm_actuator_vreg_control(a_ctrl, 0);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		return rc;
+	}
 
 	code = a_ctrl->current_lens_pos;
     CDBG("%s %d\n",__func__, __LINE__);
