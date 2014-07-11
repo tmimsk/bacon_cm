@@ -2321,9 +2321,7 @@ limProcessActionFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession ps
                     }
                     break;
                 default:
-                    limLog(pMac, LOG1,
-                      FL("Spectrum mgmt action id %d not handled"),
-                      pActionHdr->actionID);
+                    //limLog(pMac, LOG1,FL("Spectrum mgmt action id %d not handled"), pActionHdr->actionID);
                     break;
             }
             break;
