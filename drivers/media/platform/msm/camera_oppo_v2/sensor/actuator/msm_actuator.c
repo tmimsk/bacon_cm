@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -218,11 +218,8 @@ static int32_t msm_actuator_piezo_move_focus(
 		return -EFAULT;
 	}
 
-	if (num_steps <= 0 || num_steps > MAX_NUMBER_OF_STEPS) {
-		pr_err("num_steps out of range = %d\n",
-			num_steps);
-		return -EFAULT;
-	}
+	if (num_steps == 0)
+		return rc;
 
 	a_ctrl->i2c_tbl_index = 0;
 	a_ctrl->func_tbl->actuator_parse_i2c_params(a_ctrl,
@@ -473,12 +470,7 @@ static int32_t msm_actuator_power_down(struct msm_actuator_ctrl_t *a_ctrl)
 			kfree(a_ctrl->i2c_reg_tbl);
 		a_ctrl->i2c_reg_tbl = NULL;
 		a_ctrl->i2c_tbl_index = 0;
-		a_ctrl->actuator_state = ACT_OPS_INACTIVE;
-	}
-	rc = msm_actuator_vreg_control(a_ctrl, 0);
-	if (rc < 0) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
-		return rc;
+		a_ctrl->actuator_state = ACT_DISABLE_STATE;
 	}
 	rc = msm_actuator_vreg_control(a_ctrl, 0);
 	if (rc < 0) {
@@ -533,12 +525,8 @@ static int32_t msm_actuator_set_position(
 	uint32_t hw_params = 0;
 	struct msm_camera_i2c_reg_setting reg_setting;
 	CDBG("%s Enter %d\n", __func__, __LINE__);
-	if (set_pos->number_of_steps <= 0 ||
-		set_pos->number_of_steps > MAX_NUMBER_OF_STEPS) {
-		pr_err("num_steps out of range = %d\n",
-			set_pos->number_of_steps);
-		return -EFAULT;
-	}
+	if (set_pos->number_of_steps  == 0)
+		return rc;
 
 	a_ctrl->i2c_tbl_index = 0;
 	for (index = 0; index < set_pos->number_of_steps; index++) {
@@ -823,7 +811,7 @@ static int msm_actuator_close(struct v4l2_subdev *sd,
 	}
 	mutex_lock(a_ctrl->actuator_mutex);
 	if (a_ctrl->act_device_type == MSM_CAMERA_PLATFORM_DEVICE &&
-		a_ctrl->actuator_state != ACT_DISABLE_STATE) {
+		a_ctrl->actuator_state == ACT_OPS_ACTIVE) {
 		rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_util(
 			&a_ctrl->i2c_client, MSM_CCI_RELEASE);
 		if (rc < 0)
@@ -831,7 +819,6 @@ static int msm_actuator_close(struct v4l2_subdev *sd,
 	}
 	kfree(a_ctrl->i2c_reg_tbl);
 	a_ctrl->i2c_reg_tbl = NULL;
-	a_ctrl->actuator_state = ACT_DISABLE_STATE;
 	mutex_unlock(a_ctrl->actuator_mutex);
 	CDBG("Exit\n");
 	return rc;
@@ -860,6 +847,7 @@ static long msm_actuator_subdev_ioctl(struct v4l2_subdev *sd,
 		if (rc < 0) {
 			pr_err("%s:%d Actuator Power down failed\n",
 				__func__, __LINE__);
+			return rc;
 		}
 		return msm_actuator_close(sd, NULL);
 	default:
