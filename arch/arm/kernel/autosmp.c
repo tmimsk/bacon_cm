@@ -61,7 +61,7 @@ static struct asmp_param_struct {
 };
 
 static unsigned int cycle = 0;
-static int autosmp_enabled __read_mostly = 0;
+static int enabled __read_mostly = 0;
 static int enable_switch = 0;
 
 static void reschedule_hotplug_work(void)
@@ -79,7 +79,7 @@ static void __cpuinit asmp_work_fn(struct work_struct *work)
 	unsigned int max_rate, up_rate, down_rate;
 	int nr_cpu_online;
 	
-	if (!autosmp_enabled)
+	if (!enabled)
 		return;
 
 	cycle++;
@@ -146,7 +146,7 @@ static int __cpuinit set_enabled(const char *val, const struct kernel_param *kp)
 	unsigned int cpu;
 
 	ret = param_set_bool(val, kp);
-	if (autosmp_enabled) {
+	if (enabled) {
 		if (!enable_switch) {
 			enable_switch = 1;
 			INIT_DELAYED_WORK(&asmp_work, asmp_work_fn);
@@ -175,8 +175,8 @@ static struct kernel_param_ops module_ops = {
 	.get = param_get_bool,
 };
 
-module_param_cb(autosmp_enabled, &module_ops, &autosmp_enabled, 0644);
-MODULE_PARM_DESC(autosmp_enabled, "hotplug/unplug cpu cores based on cpu load");
+module_param_cb(enabled, &module_ops, &enabled, 0644);
+MODULE_PARM_DESC(enabled, "hotplug/unplug cpu cores based on cpu load");
 
 /***************************** SYSFS START *****************************/
 #define define_one_global_ro(_name)					\
@@ -287,7 +287,7 @@ static int __init asmp_init(void)
 
 	mutex_init(&asmp_param.autosmp_hotplug_mutex);
 
-	if (autosmp_enabled) {
+	if (enabled) {
 		INIT_DELAYED_WORK(&asmp_work, asmp_work_fn);
 		queue_delayed_work(asmp_workq, &asmp_work,
 				   msecs_to_jiffies(ASMP_STARTDELAY));
@@ -318,7 +318,7 @@ static int __init asmp_init(void)
 err_dev:
 	destroy_workqueue(asmp_workq);
 err_out:
-	autosmp_enabled = 0;
+	enabled = 0;
 	return ret;
 }
 late_initcall(asmp_init);
