@@ -26,9 +26,6 @@
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
 #include <linux/hrtimer.h>
-#ifdef CONFIG_STATE_NOTIFIER
-#include <linux/state_notifier.h>
-#endif
 #include <linux/mutex.h>
 
 #define DEBUG 0
@@ -43,22 +40,18 @@ struct asmp_cpudata_t {
 static struct delayed_work asmp_work;
 static struct workqueue_struct *asmp_workq;
 static DEFINE_PER_CPU(struct asmp_cpudata_t, asmp_cpudata);
-struct notifier_block notify;
 
 static struct asmp_param_struct {
 	unsigned int delay;
-	unsigned int suspended;
 	unsigned int max_cpus;
 	unsigned int min_cpus;
 	unsigned int cpufreq_up;
 	unsigned int cpufreq_down;
 	unsigned int cycle_up;
 	unsigned int cycle_down;
-	struct notifier_block notif;
 	struct mutex autosmp_hotplug_mutex;
 } asmp_param = {
 	.delay = 100,
-	.suspended = 0,
 	.max_cpus = CONFIG_NR_CPUS,
 	.min_cpus = 1,
 	.cpufreq_up = 90,
@@ -70,12 +63,6 @@ static struct asmp_param_struct {
 static unsigned int cycle = 0;
 static int autosmp_enabled __read_mostly = 0;
 static int enable_switch = 0;
-/*
- * suspend mode, if set = 1 hotplug will sleep,
- * if set = 0, then hoplug will be active all the time.
- */
-static unsigned int hotplug_suspend = 0;
-module_param_named(hotplug_suspend, hotplug_suspend, uint, 0644);
 
 static void reschedule_hotplug_work(void)
 {
@@ -152,95 +139,6 @@ static void __cpuinit asmp_work_fn(struct work_struct *work)
 
 	reschedule_hotplug_work();
 }
-
-#ifdef CONFIG_STATE_NOTIFIER
-static void __ref asmp_suspend(void)
-{
-	unsigned int cpu;
-
-	if (!hotplug_suspend)
-		return;
-
-	if (!asmp_param.suspended) {
-		mutex_lock(&asmp_param.autosmp_hotplug_mutex);
-		asmp_param.suspended = 1;
-		mutex_unlock(&asmp_param.autosmp_hotplug_mutex);
-
-		/* Flush hotplug workqueue */
-		flush_workqueue(asmp_workq);
-		cancel_delayed_work_sync(&asmp_work);
-
-		/* unplug online cpu cores */
-		for_each_online_cpu(cpu) {
-			if (cpu == 0)
-				continue;
-			cpu_down(cpu);
-		}
-		/*
-		 * Enabled core 1,2 so we will have 0-2 online
-		 * when screen is OFF to reduce system lags and reboots.
-		 */
-		cpu_up(1);
-		cpu_up(2);
-
-		pr_info(ASMP_TAG"Screen -> Off. Suspended.\n");
-	}
-}
-
-static void __ref asmp_resume(void)
-{
-	unsigned int cpu;
-	int required_reschedule = 0, required_wakeup = 0;
-
-	if (!hotplug_suspend)
-		return;
-
-	/* hotplug online cpu cores */
-	if (asmp_param.suspended) {
-		mutex_lock(&asmp_param.autosmp_hotplug_mutex);
-		asmp_param.suspended = 0;
-		mutex_unlock(&asmp_param.autosmp_hotplug_mutex);
-		required_wakeup = 1;
-		required_reschedule = 1;
-		INIT_DELAYED_WORK(&asmp_work, asmp_work_fn);
-		pr_info(ASMP_TAG"Screen -> On. Resumed.\n");
-	}
-
-	if (required_wakeup) {
-		/* Fire up all CPUs */
-		for_each_cpu_not(cpu, cpu_online_mask) {
-			if (cpu == 0)
-				continue;
-			cpu_up(cpu);
-		}
-		pr_info(ASMP_TAG" wakeup boosted.\n");
-	}
-
-	/* Resume hotplug workqueue if required */
-	if (required_reschedule)
-		reschedule_hotplug_work();
-}
-
-static int state_notifier_callback(struct notifier_block *this,
-				unsigned long event, void *data)
-{
-	if (!autosmp_enabled)
-                return NOTIFY_OK;
-
-	switch (event) {
-		case STATE_NOTIFIER_ACTIVE:
-			asmp_resume();
-			break;
-		case STATE_NOTIFIER_SUSPEND:
-			asmp_suspend();
-			break;
-		default:
-			break;
-	}
-
-	return NOTIFY_OK;
-}
-#endif
 
 static int __cpuinit set_enabled(const char *val, const struct kernel_param *kp)
 {
@@ -386,15 +284,6 @@ static int __init asmp_init(void)
 		ret = -ENOMEM;
 		goto err_out;
 	}
-
-#ifdef CONFIG_STATE_NOTIFIER
-	asmp_param.notif.notifier_call = state_notifier_callback;
-	if (state_register_client(&asmp_param.notif)) {
-		pr_err("%s: Failed to register State notifier callback\n",
-			ASMP_TAG);
-		goto err_dev;
-	}
-#endif
 
 	mutex_init(&asmp_param.autosmp_hotplug_mutex);
 
