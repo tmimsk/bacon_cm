@@ -12,6 +12,7 @@
  */
 
 #define pr_fmt(fmt) "cpu-boost: " fmt
+#define DEFAULT_SWITCH_ZERO 0
 
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -45,16 +46,16 @@ static struct workqueue_struct *cpu_boost_wq;
 
 static struct work_struct input_boost_work;
 
-static unsigned int boost_ms;
+static unsigned int boost_ms = DEFAULT_SWITCH_ZERO;
 module_param(boost_ms, uint, 0644);
 
-static unsigned int sync_threshold;
+static unsigned int sync_threshold = DEFAULT_SWITCH_ZERO;
 module_param(sync_threshold, uint, 0644);
 
-static unsigned int input_boost_freq;
+static unsigned int input_boost_freq = DEFAULT_SWITCH_ZERO;
 module_param(input_boost_freq, uint, 0644);
 
-static unsigned int input_boost_ms = 40;
+static unsigned int input_boost_ms = DEFAULT_SWITCH_ZERO;
 module_param(input_boost_ms, uint, 0644);
 
 static u64 last_input_time;
